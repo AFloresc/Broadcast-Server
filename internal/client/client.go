@@ -2,10 +2,10 @@ package client
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/gorilla/websocket"
@@ -28,6 +28,7 @@ func Run(url string) {
 	aliasScanner.Scan()
 	alias := aliasScanner.Text()
 
+	// Conexión WebSocket
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		fmt.Println("❌ Error de conexión:", err)
@@ -35,9 +36,14 @@ func Run(url string) {
 	}
 	defer conn.Close()
 
+	// Enviar alias al servidor
+	conn.WriteMessage(websocket.TextMessage, []byte(alias))
+
+	// Manejo de interrupciones (Ctrl+C)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
+	// Lectura de mensajes entrantes
 	go func() {
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -45,18 +51,16 @@ func Run(url string) {
 				fmt.Println("🔌 Conexión cerrada.")
 				return
 			}
-			// Extraer alias si existe
-			text := string(msg)
-			if strings.HasPrefix(text, "[") {
-				end := strings.Index(text, "]")
-				if end > 1 {
-					alias := text[1:end]
-					colored := colorFor(alias) + text + reset
-					fmt.Println(colored)
-					continue
-				}
+			var data struct {
+				Alias string `json:"alias"`
+				Color string `json:"color"`
+				Text  string `json:"text"`
 			}
-			fmt.Println(text)
+			if err := json.Unmarshal(msg, &data); err != nil {
+				fmt.Println(string(msg)) // fallback
+				continue
+			}
+			fmt.Printf("%s[%s]%s %s\n", data.Color, data.Alias, reset, data.Text)
 		}
 	}()
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -46,9 +47,16 @@ func (h *Hub) Run() {
 }
 
 type Client struct {
-	conn *websocket.Conn
-	send chan []byte
+	conn  *websocket.Conn
+	send  chan []byte
+	alias string
+	color string
 }
+
+var colorPool = []string{
+	"\033[31m", "\033[32m", "\033[33m", "\033[34m", "\033[35m", "\033[36m",
+}
+var colorIndex = 0
 
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{}
@@ -56,7 +64,20 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	client := &Client{conn: conn, send: make(chan []byte, 256)}
+
+	_, aliasMsg, err := conn.ReadMessage()
+	if err != nil {
+		conn.Close()
+		return
+	}
+	alias := string(aliasMsg)
+
+	client := &Client{
+		conn:  conn,
+		send:  make(chan []byte, 256),
+		alias: alias,
+		color: nextColor(),
+	}
 	hub.register <- client
 
 	go client.writePump()
@@ -73,7 +94,8 @@ func (c *Client) readPump(hub *Hub) {
 		if err != nil {
 			break
 		}
-		hub.broadcast <- message
+		msg := fmt.Sprintf(`{"alias":"%s","color":"%s","text":"%s"}`, c.alias, c.color, string(message))
+		hub.broadcast <- []byte(msg)
 	}
 }
 
@@ -81,4 +103,10 @@ func (c *Client) writePump() {
 	for msg := range c.send {
 		c.conn.WriteMessage(websocket.TextMessage, msg)
 	}
+}
+
+func nextColor() string {
+	c := colorPool[colorIndex%len(colorPool)]
+	colorIndex++
+	return c
 }
