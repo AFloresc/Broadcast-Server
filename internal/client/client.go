@@ -5,10 +5,22 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/gorilla/websocket"
 )
+
+var colors = []string{
+	"\033[31m", // rojo
+	"\033[32m", // verde
+	"\033[33m", // amarillo
+	"\033[34m", // azul
+	"\033[35m", // magenta
+	"\033[36m", // cyan
+}
+
+const reset = "\033[0m"
 
 func Run(url string) {
 	fmt.Print("🆔 Ingresa tu alias: ")
@@ -33,7 +45,18 @@ func Run(url string) {
 				fmt.Println("🔌 Conexión cerrada.")
 				return
 			}
-			fmt.Println("📨", string(msg))
+			// Extraer alias si existe
+			text := string(msg)
+			if strings.HasPrefix(text, "[") {
+				end := strings.Index(text, "]")
+				if end > 1 {
+					alias := text[1:end]
+					colored := colorFor(alias) + text + reset
+					fmt.Println(colored)
+					continue
+				}
+			}
+			fmt.Println(text)
 		}
 	}()
 
@@ -55,4 +78,12 @@ func Run(url string) {
 			}
 		}
 	}
+}
+
+func colorFor(alias string) string {
+	sum := 0
+	for _, c := range alias {
+		sum += int(c)
+	}
+	return colors[sum%len(colors)]
 }
