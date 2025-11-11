@@ -3,23 +3,28 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
-	clients    map[*Client]bool
-	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
+	clients       map[*Client]bool
+	aliasToClient map[string]*Client
+	aliasHistory  map[string]string
+	broadcast     chan []byte
+	register      chan *Client
+	unregister    chan *Client
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:    make(map[*Client]bool),
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
+		clients:       make(map[*Client]bool),
+		aliasToClient: make(map[string]*Client),
+		aliasHistory:  make(map[string]string),
+		broadcast:     make(chan []byte),
+		register:      make(chan *Client),
+		unregister:    make(chan *Client),
 	}
 }
 
@@ -58,6 +63,12 @@ var colorPool = []string{
 }
 var colorIndex = 0
 
+func nextColor() string {
+	c := colorPool[colorIndex%len(colorPool)]
+	colorIndex++
+	return c
+}
+
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{}
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -65,6 +76,7 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Recibir alias inicial
 	_, aliasMsg, err := conn.ReadMessage()
 	if err != nil {
 		conn.Close()
@@ -72,41 +84,69 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 	alias := string(aliasMsg)
 
+	// Asignar color único
+	color := nextColor()
+
 	client := &Client{
 		conn:  conn,
 		send:  make(chan []byte, 256),
 		alias: alias,
-		color: nextColor(),
+		color: color,
 	}
+
 	hub.register <- client
+	hub.aliasToClient[alias] = client
 
 	go client.writePump()
-	go client.readPump(hub)
-}
+	go func() {
+		defer func() {
+			hub.unregister <- client
+			client.conn.Close()
+			delete(hub.aliasToClient, client.alias)
+		}()
+		for {
+			_, message, err := client.conn.ReadMessage()
+			if err != nil {
+				break
+			}
+			text := string(message)
 
-func (c *Client) readPump(hub *Hub) {
-	defer func() {
-		hub.unregister <- c
-		c.conn.Close()
-	}()
-	for {
-		_, message, err := c.conn.ReadMessage()
-		if err != nil {
-			break
+			// Comando: cambiar alias
+			if strings.HasPrefix(text, "/alias ") {
+				newAlias := strings.TrimSpace(strings.TrimPrefix(text, "/alias "))
+				if newAlias == "" || hub.aliasToClient[newAlias] != nil {
+					client.send <- []byte(`{"alias":"server","color":"\033[31m","text":"Alias inválido o en uso"}`)
+					continue
+				}
+				hub.aliasHistory[newAlias] = client.alias
+				delete(hub.aliasToClient, client.alias)
+				client.alias = newAlias
+				hub.aliasToClient[newAlias] = client
+				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[32m","text":"Alias cambiado a %s"}`, newAlias))
+				continue
+			}
+
+			// Comando: consultar alias anterior
+			if strings.HasPrefix(text, "/whowas ") {
+				query := strings.TrimSpace(strings.TrimPrefix(text, "/whowas "))
+				prev, ok := hub.aliasHistory[query]
+				if ok {
+					client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"%s era %s"}`, query, prev))
+				} else {
+					client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[33m","text":"No hay historial para %s"}`, query))
+				}
+				continue
+			}
+
+			// Mensaje normal
+			msg := fmt.Sprintf(`{"alias":"%s","color":"%s","text":"%s"}`, client.alias, client.color, text)
+			hub.broadcast <- []byte(msg)
 		}
-		msg := fmt.Sprintf(`{"alias":"%s","color":"%s","text":"%s"}`, c.alias, c.color, string(message))
-		hub.broadcast <- []byte(msg)
-	}
+	}()
 }
 
 func (c *Client) writePump() {
 	for msg := range c.send {
 		c.conn.WriteMessage(websocket.TextMessage, msg)
 	}
-}
-
-func nextColor() string {
-	c := colorPool[colorIndex%len(colorPool)]
-	colorIndex++
-	return c
 }
