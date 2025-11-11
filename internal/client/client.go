@@ -11,6 +11,11 @@ import (
 )
 
 func Run(url string) {
+	fmt.Print("🆔 Ingresa tu alias: ")
+	aliasScanner := bufio.NewScanner(os.Stdin)
+	aliasScanner.Scan()
+	alias := aliasScanner.Text()
+
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		fmt.Println("❌ Error de conexión:", err)
@@ -18,11 +23,9 @@ func Run(url string) {
 	}
 	defer conn.Close()
 
-	// Manejo de interrupciones (Ctrl+C)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
-	// Lectura de mensajes entrantes
 	go func() {
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -34,7 +37,6 @@ func Run(url string) {
 		}
 	}()
 
-	// Entrada de usuario
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("💬 Escribe mensajes para enviar. Ctrl+C para salir.")
 	for {
@@ -45,7 +47,8 @@ func Run(url string) {
 		default:
 			if scanner.Scan() {
 				text := scanner.Text()
-				if err := conn.WriteMessage(websocket.TextMessage, []byte(text)); err != nil {
+				msg := fmt.Sprintf("[%s] %s", alias, text)
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
 					fmt.Println("❌ Error al enviar:", err)
 					return
 				}
