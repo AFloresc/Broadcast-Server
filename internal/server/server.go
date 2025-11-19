@@ -97,8 +97,13 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	hub.register <- client
 	hub.aliasToClient[alias] = client
 
-	announcement := fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"📢 %s se ha conectado"}`, alias)
-	hub.broadcast <- []byte(announcement)
+	/*
+		announcement := fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"📢 %s se ha conectado"}`, alias)
+		hub.broadcast <- []byte(announcement)
+	*/
+	count := len(hub.clients)
+	status := fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"👥 Ahora hay %d clientes conectados"}`, count)
+	hub.broadcast <- []byte(status)
 
 	go client.writePump()
 	go func() {
@@ -106,9 +111,13 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 			hub.unregister <- client
 			client.conn.Close()
 			delete(hub.aliasToClient, client.alias)
-
-			announcement := fmt.Sprintf(`{"alias":"server","color":"\033[33m","text":"📴 %s se ha desconectado"}`, client.alias)
-			hub.broadcast <- []byte(announcement)
+			/*
+				announcement := fmt.Sprintf(`{"alias":"server","color":"\033[33m","text":"📴 %s se ha desconectado"}`, client.alias)
+				hub.broadcast <- []byte(announcement)
+			*/
+			count := len(hub.clients) - 1 // aún no se ha eliminado
+			status := fmt.Sprintf(`{"alias":"server","color":"\033[33m","text":"👥 Ahora hay %d clientes conectados"}`, count)
+			hub.broadcast <- []byte(status)
 		}()
 		for {
 			_, message, err := client.conn.ReadMessage()
