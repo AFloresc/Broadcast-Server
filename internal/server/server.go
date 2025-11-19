@@ -189,6 +189,20 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			// Comando: nuestra todos los colres disponibles
+			if strings.HasPrefix(text, "/colors") {
+				lines := []string{"🎨 Colores disponibles:"}
+				for code, name := range colorNames {
+					// Renderiza el nombre y el código en su color
+					colored := fmt.Sprintf("%s%s%s: %s", code, name, "\033[0m", code)
+					lines = append(lines, colored)
+				}
+
+				response := strings.Join(lines, "\\n")
+				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"%s"}`, response))
+				continue
+			}
+
 			// Mensaje normal
 			msg := fmt.Sprintf(`{"alias":"%s","color":"%s","text":"%s"}`, client.alias, client.color, text)
 			hub.broadcast <- []byte(msg)
