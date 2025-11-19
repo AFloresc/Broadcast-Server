@@ -164,6 +164,12 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			//Comando: whoami el servidor responde con el alias actual cel cliente
+			if strings.HasPrefix(text, "/whoami") {
+				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"🪪 Tu alias actual es %s"}`, client.alias))
+				continue
+			}
+
 			// Mensaje normal
 			msg := fmt.Sprintf(`{"alias":"%s","color":"%s","text":"%s"}`, client.alias, client.color, text)
 			hub.broadcast <- []byte(msg)
