@@ -178,6 +178,8 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 					colored := fmt.Sprintf("%s%s%s", c.color, c.alias, "\033[0m")
 					lines = append(lines, colored)
 				}
+				total := len(hub.clients)
+				lines = append(lines, fmt.Sprintf("🔢 Total: %d", total))
 				response := strings.Join(lines, "\\n")
 				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"%s"}`, response))
 				continue
