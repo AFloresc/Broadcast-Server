@@ -153,6 +153,17 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			// Comando: listar alias
+			if strings.HasPrefix(text, "/list") {
+				aliases := make([]string, 0, len(hub.clients))
+				for c := range hub.clients {
+					aliases = append(aliases, c.alias)
+				}
+				list := strings.Join(aliases, ", ")
+				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"👥 Conectados: %s"}`, list))
+				continue
+			}
+
 			// Mensaje normal
 			msg := fmt.Sprintf(`{"alias":"%s","color":"%s","text":"%s"}`, client.alias, client.color, text)
 			hub.broadcast <- []byte(msg)
