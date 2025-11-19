@@ -72,6 +72,15 @@ var colorNames = map[string]string{
 	"\033[36m": "cyan",
 }
 
+var nameToColor = map[string]string{
+	"red":     "\033[31m",
+	"green":   "\033[32m",
+	"yellow":  "\033[33m",
+	"blue":    "\033[34m",
+	"magenta": "\033[35m",
+	"cyan":    "\033[36m",
+}
+
 func nextColor() string {
 	c := colorPool[colorIndex%len(colorPool)]
 	colorIndex++
@@ -189,7 +198,7 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Comando: nuestra todos los colres disponibles
+			// Comando: nuestra todos los colores disponibles
 			if strings.HasPrefix(text, "/colors") {
 				lines := []string{"🎨 Colores disponibles:"}
 				for code, name := range colorNames {
@@ -200,6 +209,23 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 				response := strings.Join(lines, "\\n")
 				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"%s"}`, response))
+				continue
+			}
+
+			// Comando: cambnia tu color actual
+			if strings.HasPrefix(text, "/color ") {
+				requested := strings.TrimSpace(strings.TrimPrefix(text, "/color "))
+				newColor, ok := nameToColor[requested]
+				if !ok {
+					client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[31m","text":"Color '%s' no reconocido. Usa /colors para ver opciones."}`, requested))
+					continue
+				}
+
+				client.color = newColor
+				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"%s","text":"🎨 Color cambiado a %s"}`, newColor, requested))
+
+				announcement := fmt.Sprintf(`{"alias":"server","color":"%s","text":"🎨 %s ha cambiado su color a %s"}`, newColor, client.alias, requested)
+				hub.broadcast <- []byte(announcement)
 				continue
 			}
 
