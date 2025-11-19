@@ -97,12 +97,18 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	hub.register <- client
 	hub.aliasToClient[alias] = client
 
+	announcement := fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"📢 %s se ha conectado"}`, alias)
+	hub.broadcast <- []byte(announcement)
+
 	go client.writePump()
 	go func() {
 		defer func() {
 			hub.unregister <- client
 			client.conn.Close()
 			delete(hub.aliasToClient, client.alias)
+
+			announcement := fmt.Sprintf(`{"alias":"server","color":"\033[33m","text":"📴 %s se ha desconectado"}`, client.alias)
+			hub.broadcast <- []byte(announcement)
 		}()
 		for {
 			_, message, err := client.conn.ReadMessage()
