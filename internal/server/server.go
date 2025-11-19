@@ -63,6 +63,15 @@ var colorPool = []string{
 }
 var colorIndex = 0
 
+var colorNames = map[string]string{
+	"\033[31m": "red",
+	"\033[32m": "green",
+	"\033[33m": "yellow",
+	"\033[34m": "blue",
+	"\033[35m": "magenta",
+	"\033[36m": "cyan",
+}
+
 func nextColor() string {
 	c := colorPool[colorIndex%len(colorPool)]
 	colorIndex++
@@ -164,9 +173,19 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			//Comando: whoami el servidor responde con el alias actual cel cliente
+			// Comando: el servidor responde con el alias actual cel cliente
 			if strings.HasPrefix(text, "/whoami") {
 				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"\033[36m","text":"🪪 Tu alias actual es %s"}`, client.alias))
+				continue
+			}
+
+			//Comando: retorna el color actual del alias
+			if strings.HasPrefix(text, "/color") {
+				name := colorNames[client.color]
+				if name == "" {
+					name = "desconocido"
+				}
+				client.send <- []byte(fmt.Sprintf(`{"alias":"server","color":"%s","text":"🎨 Tu color actual es %s"}`, client.color, name))
 				continue
 			}
 
